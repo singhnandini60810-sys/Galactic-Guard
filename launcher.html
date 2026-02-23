@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Rocket Shooter</title>
+<style>
+body{
+  margin:0;
+  background:black;
+  overflow:hidden;
+  font-family:Arial;
+  color:white;
+}
+
+#game{
+  width:400px;
+  height:500px;
+  background:#111;
+  margin:20px auto;
+  position:relative;
+  overflow:hidden;
+  border:2px solid white;
+}
+
+#rocket{
+  position:absolute;
+  bottom:10px;
+  left:175px;
+  font-size:40px;
+  transition:0.1s;
+}
+
+.enemy{
+  position:absolute;
+  font-size:30px;
+}
+
+.bullet{
+  position:absolute;
+  width:5px;
+  height:15px;
+  background:red;
+}
+
+#ui{
+  width:400px;
+  margin:auto;
+  display:flex;
+  justify-content:space-between;
+  font-size:18px;
+}
+</style>
+</head>
+<body>
+
+<div id="ui">
+  <div>Score: <span id="score">0</span></div>
+  <div>High: <span id="highScore">0</span></div>
+  <div id="hearts">❤️❤️❤️</div>
+</div>
+
+<div id="game">
+  <div id="rocket">🚀</div>
+</div>
+
+<script>
+const game = document.getElementById("game");
+const rocket = document.getElementById("rocket");
+const scoreDisplay = document.getElementById("score");
+const highScoreDisplay = document.getElementById("highScore");
+const heartsContainer = document.getElementById("hearts");
+
+let rocketX = 175;
+let score = 0;
+let highScore = localStorage.getItem("highScore") || 0;
+let lives = 3;
+
+let gameRunning = false;
+let paused = false;
+
+let enemySpawner = null;
+let enemies = [];
+let bullets = [];
+
+let baseSpeed = 3;
+let speed = baseSpeed;
+
+let shieldActive = false;
+let boostActive = false;
+
+highScoreDisplay.textContent = highScore;
+
+function updateHearts(){
+  heartsContainer.innerHTML="";
+  for(let i=0;i<lives;i++){
+    heartsContainer.innerHTML+="❤️";
+  }
+}
+
+function startGame(){
+  if(gameRunning) return;
+
+  score=0;
+  lives=3;
+  speed=baseSpeed;
+  gameRunning=true;
+  paused=false;
+  shieldActive=false;
+  boostActive=false;
+
+  scoreDisplay.textContent=score;
+  updateHearts();
+
+  clearAllObjects();
+  startSpawner();
+}
+
+function pauseGame(){
+  if(!gameRunning) return;
+  paused=!paused;
+}
+
+function endGame(){
+  gameRunning=false;
+  clearInterval(enemySpawner);
+
+  if(score>highScore){
+    highScore=score;
+    localStorage.setItem("highScore",highScore);
+    highScoreDisplay.textContent=highScore;
+  }
+
+  alert("Game Over! Score: "+score);
+}
+
+function startSpawner(){
+  enemySpawner=setInterval(()=>{
+    if(!gameRunning||paused) return;
+    createEnemy();
+  },1000);
+}
+
+function createEnemy(){
+  const enemy=document.createElement("div");
+  enemy.classList.add("enemy");
+  enemy.textContent="👾";
+  enemy.style.left=Math.random()*360+"px";
+  enemy.style.top="0px";
+  game.appendChild(enemy);
+
+  const enemyObj={
+    element:enemy,
+    y:0
+  };
+
+  enemies.push(enemyObj);
+}
+
+function createBullet(){
+  const bullet=document.createElement("div");
+  bullet.classList.add("bullet");
+  bullet.style.left=rocketX+17+"px";
+  bullet.style.bottom="40px";
+  game.appendChild(bullet);
+
+  const bulletObj={
+    element:bullet,
+    y:40
+  };
+
+  bullets.push(bulletObj);
+}
+
+function gameLoop(){
+  if(!gameRunning||paused) return;
+
+  // Move enemies
+  enemies.forEach((enemy,index)=>{
+    enemy.y+=speed;
+    enemy.element.style.top=enemy.y+"px";
+
+    if(enemy.y>=480){
+      if(!shieldActive){
+        lives--;
+        updateHearts();
+        if(lives<=0){
+          endGame();
+        }
+      }
+      enemy.element.remove();
+      enemies.splice(index,1);
+    }
+  });
+
+  // Move bullets
+  bullets.forEach((bullet,bIndex)=>{
+    bullet.y+=8;
+    bullet.element.style.bottom=bullet.y+"px";
+
+    if(bullet.y>500){
+      bullet.element.remove();
+      bullets.splice(bIndex,1);
+    }
+
+    enemies.forEach((enemy,eIndex)=>{
+      const bRect=bullet.element.getBoundingClientRect();
+      const eRect=enemy.element.getBoundingClientRect();
+
+      if(
+        bRect.left<eRect.right &&
+        bRect.right>eRect.left &&
+        bRect.top<eRect.bottom &&
+        bRect.bottom>eRect.top
+      ){
+        enemy.element.remove();
+        bullet.element.remove();
+        enemies.splice(eIndex,1);
+        bullets.splice(bIndex,1);
+        score++;
+        scoreDisplay.textContent=score;
+      }
+    });
+  });
+}
+
+function clearAllObjects(){
+  enemies.forEach(e=>e.element.remove());
+  bullets.forEach(b=>b.element.remove());
+  enemies=[];
+  bullets=[];
+}
+
+setInterval(gameLoop,40);
+
+// CONTROLS
+document.addEventListener("keydown",e=>{
+  if(e.key==="Enter") startGame();
+  if(e.key==="Shift") pauseGame();
+
+  if(!gameRunning||paused) return;
+
+  if(e.key==="ArrowLeft" && rocketX>0){
+    rocketX-=15;
+  }
+
+  if(e.key==="ArrowRight" && rocketX<350){
+    rocketX+=15;
+  }
+
+  if(e.key==="ArrowUp"){
+    createBullet();
+  }
+
+  if(e.key===" "){
+    if(!boostActive){
+      boostActive=true;
+      speed=6;
+      setTimeout(()=>{
+        speed=baseSpeed;
+        boostActive=false;
+      },15000);
+    }
+  }
+
+  if(e.key==="ArrowDown"){
+    if(!shieldActive){
+      shieldActive=true;
+      rocket.style.boxShadow="0 0 20px cyan";
+      setTimeout(()=>{
+        shieldActive=false;
+        rocket.style.boxShadow="none";
+      },15000);
+    }
+  }
+
+  rocket.style.left=rocketX+"px";
+});
+
+updateHearts();
+</script>
+</body>
+</html>
